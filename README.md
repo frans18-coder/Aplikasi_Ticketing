@@ -25,11 +25,28 @@ cp .env.example .env
 # 3. Instal dependensi
 npm install
 
-# 4. Jalankan server development
+# 4. Sinkronisasi database & seeding awal
+npx prisma db push
+npm run db:seed
+
+# 5. Jalankan server development
 npm run dev
 ```
 
 Buka [http://localhost:3000](http://localhost:3000) di browser Anda.
+
+### Perintah Database (Prisma)
+
+```bash
+# Sinkronkan skema ke database
+npx prisma db push
+
+# Jalankan data seeding (Admin, Petugas, Siswa, Kategori Tiket)
+npm run db:seed
+
+# Buka Prisma Studio GUI untuk melihat isi database
+npx prisma studio
+```
 
 ### Build Produksi
 

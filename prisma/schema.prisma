@@ -1,0 +1,204 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUM
+// ─────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  PETUGAS
+  SISWA
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum CheckinStatus {
+  VALID
+  INVALID
+  ALREADY_USED
+}
+
+// ─────────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  nis       String   @unique           // Nomor Induk Siswa (juga dipakai admin/petugas)
+  name      String
+  email     String?  @unique
+  password  String                     // bcrypt hash
+  role      Role     @default(SISWA)
+  kelas     String?                    // contoh: "XII RPL 1"
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders    Order[]
+  checkins  Checkin[]
+  auditLogs AuditLog[]
+  referrals Referral[] @relation("referrer")
+  referred  Referral[] @relation("referred")
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// TICKET CATEGORY
+// ─────────────────────────────────────────────
+
+model TicketCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique               // contoh: "VVIP", "VIP", "Reguler"
+  description String?
+  price       Int                           // harga dalam rupiah
+  quota       Int                           // total kuota
+  sold        Int      @default(0)          // jumlah terjual
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tickets Ticket[]
+
+  @@map("ticket_categories")
+}
+
+// ─────────────────────────────────────────────
+// ORDER
+// ─────────────────────────────────────────────
+
+model Order {
+  id         String      @id @default(cuid())
+  userId     String
+  status     OrderStatus @default(PENDING)
+  totalPrice Int
+  quantity   Int         @default(1)
+  expiredAt  DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id])
+  tickets  Ticket[]
+  payment  Payment?
+  referral Referral?
+
+  @@map("orders")
+}
+
+// ─────────────────────────────────────────────
+// TICKET
+// ─────────────────────────────────────────────
+
+model Ticket {
+  id               String   @id @default(cuid())
+  orderId          String
+  ticketCategoryId String
+  qrCode           String   @unique       // kode unik untuk scan
+  isUsed           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  order          Order          @relation(fields: [orderId], references: [id])
+  ticketCategory TicketCategory @relation(fields: [ticketCategoryId], references: [id])
+  checkin        Checkin?
+
+  @@map("tickets")
+}
+
+// ─────────────────────────────────────────────
+// PAYMENT
+// ─────────────────────────────────────────────
+
+model Payment {
+  id            String        @id @default(cuid())
+  orderId       String        @unique
+  status        PaymentStatus @default(PENDING)
+  method        String?                          // "TRANSFER", "QRIS", dsb.
+  amount        Int
+  proofUrl      String?                          // bukti pembayaran
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("payments")
+}
+
+// ─────────────────────────────────────────────
+// CHECKIN
+// ─────────────────────────────────────────────
+
+model Checkin {
+  id        String        @id @default(cuid())
+  ticketId  String        @unique
+  userId    String                              // petugas yang scan
+  status    CheckinStatus @default(VALID)
+  scannedAt DateTime      @default(now())
+
+  ticket  Ticket @relation(fields: [ticketId], references: [id])
+  petugas User   @relation(fields: [userId], references: [id])
+
+  @@map("checkins")
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String                          // contoh: "CREATE_ORDER", "CHECKIN_TICKET"
+  entity    String                          // contoh: "Order", "Ticket"
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────
+// REFERRAL
+// ─────────────────────────────────────────────
+
+model Referral {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  referrerId String
+  referredId String?
+  orderId    String?  @unique
+  usedAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  referrer User   @relation("referrer", fields: [referrerId], references: [id])
+  referred User?  @relation("referred", fields: [referredId], references: [id])
+  order    Order? @relation(fields: [orderId], references: [id])
+
+  @@map("referrals")
+}
